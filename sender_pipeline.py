@@ -13,7 +13,11 @@ from bitrate_sim import compress_text, simulate_transmission, BITRATE_MODES, RAW
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {DEVICE}")
 
+<<<<<<< HEAD
 MIC_INDEX = None  # your mic's index
+=======
+MIC_INDEX = 1  # your mic's index
+>>>>>>> 107748eeb26a4a99eefa61886b0709315585d4ae
 MAX_DURATION = 20  # absolute safety cap in seconds
 
 if MIC_INDEX is None:
