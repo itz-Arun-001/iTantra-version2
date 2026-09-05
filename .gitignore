@@ -220,3 +220,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+actual_raw_recording.wav
+actual_trimmed_audio.wav
+venv2/

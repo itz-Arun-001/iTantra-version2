@@ -1,3 +1,4 @@
+from transformers import AutoModel
 import sounddevice as sd
 import numpy as np
 import torch
@@ -31,11 +32,17 @@ asr = pipeline(
 )
 asr.model.generation_config.suppress_tokens = None
 asr.model.generation_config.begin_suppress_tokens = None
+print("Loading IndicConformer (Tamil/Hindi/Telugu)...")
+indic_model = AutoModel.from_pretrained(
+    "ai4bharat/indic-conformer-600m-multilingual", trust_remote_code=True
+)
+
+INDIC_LANGUAGES = {"ta", "hi", "te"}
 
 resampler = torchaudio.transforms.Resample(orig_freq=native_rate, new_freq=16000)
 
 def record_and_transcribe(language="en"):
-    """Record from mic (fixed duration), trim silence with VAD, transcribe with Whisper."""
+    """Record from mic (fixed duration), trim silence with VAD, transcribe with Whisper or IndicConformer."""
     RECORD_DURATION = 20  # seconds
 
     print("\nGet ready...")
@@ -55,7 +62,15 @@ def record_and_transcribe(language="en"):
         audio_tensor = audio_tensor.mean(dim=0, keepdim=True)
     resampled = resampler(audio_tensor).squeeze(0)
 
-    speech_timestamps = get_speech_timestamps(resampled, vad_model, sampling_rate=16000)
+    speech_timestamps = get_speech_timestamps(
+        resampled, vad_model, sampling_rate=16000,
+        threshold=0.35,
+        min_speech_duration_ms=100,
+    )
+
+    print(f"VAD detected {len(speech_timestamps)} speech segment(s):")
+    for i, seg in enumerate(speech_timestamps):
+        print(f"  Segment {i+1}: {seg['start']/16000:.2f}s to {seg['end']/16000:.2f}s")
 
     if not speech_timestamps:
         print("No speech detected.")
@@ -68,18 +83,22 @@ def record_and_transcribe(language="en"):
     trimmed = resampled[start:end].numpy()
     sf.write("actual_trimmed_audio.wav", trimmed, 16000)
 
-    result = asr(
-        {"array": trimmed, "sampling_rate": 16000},
-        generate_kwargs={
-            "language": language,
-            "task": "transcribe",
-            "no_repeat_ngram_size": 3,
-            "repetition_penalty": 1.3,
-            "condition_on_prev_tokens": False,
-        },
-    )
-    return result["text"].strip()
-
+    if language in INDIC_LANGUAGES:
+        wav_tensor = torch.from_numpy(trimmed).float().unsqueeze(0)
+        text = indic_model(wav_tensor, language, "rnnt")
+        return text.strip()
+    else:
+        result = asr(
+            {"array": trimmed, "sampling_rate": 16000},
+            generate_kwargs={
+                "language": language,
+                "task": "transcribe",
+                "no_repeat_ngram_size": 3,
+                "repetition_penalty": 1.3,
+                "condition_on_prev_tokens": False,
+            },
+        )
+        return result["text"].strip()
 
 def run_sender(bitrate_mode="LOW", language="en"):
     text = record_and_transcribe(language=language)

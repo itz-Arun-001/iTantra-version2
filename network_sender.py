@@ -6,7 +6,7 @@ from sender_pipeline import record_and_transcribe
 from bitrate_sim import compress_text, BITRATE_MODES, RAW_AUDIO_BITRATE
 from network_common import PORT, make_packet, split_into_chunks
 
-RECEIVER_IP = "10.163.66.102"  # <-- REPLACE with the receiver laptop's actual IP from Step 1
+RECEIVER_IP = "10.11.141.198"  # <-- REPLACE with the receiver laptop's actual IP from Step 1
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(5.0)
@@ -70,4 +70,9 @@ def send_message(bitrate_mode="LOW", priority="normal", language="ta"):
 
 
 if __name__ == "__main__":
-    send_message(bitrate_mode="LOW", priority="normal", language="ta")
+    print("Choose language: en / hi / ta / te")
+    lang_choice = input("Language code: ").strip().lower()
+    if lang_choice not in ("en", "hi", "ta", "te"):
+        print("Invalid choice, defaulting to English.")
+        lang_choice = "en"
+    send_message(bitrate_mode="LOW", priority="normal", language=lang_choice)
