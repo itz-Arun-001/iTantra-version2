@@ -6,7 +6,7 @@ from sender_pipeline import record_and_transcribe
 from bitrate_sim import compress_text, BITRATE_MODES, RAW_AUDIO_BITRATE
 from network_common import PORT, make_packet, split_into_chunks
 
-RECEIVER_IP = "10.11.141.198"  # <-- REPLACE with the receiver laptop's actual IP from Step 1
+RECEIVER_IP = "127.0.0.1"  # <-- REPLACE with the receiver laptop's actual IP from Step 1 10.11.141.198
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(5.0)
