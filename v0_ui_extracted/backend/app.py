@@ -135,9 +135,18 @@ def receiver_loop():
                 text = gzip.decompress(payload).decode() if meta.get("compressed") else payload.decode()
                 item = {"id": uuid.uuid4().hex, "text": text, "language": meta.get("language", "en"), "priority": meta.get("priority", "normal"), "packetsTotal": expected, "packetsLost": 0, "packetsRetried": 0, "bytesReceived": len(payload), "timestamp": time.strftime("%H:%M:%S")}
                 history.appendleft(item); socketio.emit("message_received", item)
-                try:
-                    receiver_pipeline = load("receiver_pipeline"); output = AUDIO_DIR / f"{item['id']}.wav"; receiver_pipeline.speak_text(text, str(output), item["language"]); audio_files[item["id"]] = output; socketio.emit("audio_ready", {"id": item["id"]})
-                except Exception as exc: socketio.emit("receiver_error", {"message": f"Message decoded, but TTS failed: {exc}"})
+
+                def synthesize(text=text, item_id=item["id"], language=item["language"]):
+                    try:
+                        receiver_pipeline = load("receiver_pipeline")
+                        output = AUDIO_DIR / f"{item_id}.wav"
+                        receiver_pipeline.speak_text(text, str(output), language)
+                        audio_files[item_id] = output
+                        socketio.emit("audio_ready", {"id": item_id})
+                    except Exception as exc:
+                        socketio.emit("receiver_error", {"message": f"Message decoded, but TTS failed: {exc}"})
+
+                threading.Thread(target=synthesize, daemon=True).start()
                 packets = {}; expected = 0
             except Exception as exc: socketio.emit("receiver_error", {"message": f"Packet reassembly failed: {exc}"})
     sock.close()
