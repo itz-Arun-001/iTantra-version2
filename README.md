@@ -4,15 +4,14 @@
 
 iTantra is a Smart India Hackathon (SIH26173) build tackling a simple but hard problem: **voice is expensive to transmit, but in an emergency, voice is the message people actually understand.** iTantra converts speech to text on-device, sends only the (tiny) text payload over a low-bitrate link, and reconstructs speech on the receiving end — so a distress call can travel over a link that could never carry raw audio.
 
-This is **v2** of the project. The core idea, the pipeline shape, and the web UI are unchanged from v1 — what's different is the **speech-to-text engine**. v1 used OpenAI's Whisper for every language. Testing showed Whisper is reliable on English but **frequently hallucinates or produces non-words on Tamil, Hindi, and Telugu**, even on clean audio. v2 fixes this by routing Indian-language speech through **AI4Bharat's IndicConformer** instead — a model purpose-trained on Indian languages — while keeping Whisper for English, where it already works well. This was validated with real side-by-side transcription tests on the same audio files, not just a model-card claim; see [What Changed in v2](#-what-changed-in-v2) for the actual evidence.
+This is **v2** of the project. The core idea, the pipeline shape, and the web UI are unchanged from v1 — what's different is the **speech-to-text engine** for Indian languages. v1 used OpenAI's Whisper for every language; v2 routes Tamil, Hindi, and Telugu through AI4Bharat's IndicConformer instead, after real testing showed it's substantially more accurate on these languages than Whisper. Full details and the actual comparison evidence are in [What Changed in v2](#-what-changed-in-v2) at the end of this document.
 
-This repo contains a **working, end-to-end desktop prototype** with two proven transport paths: a polished web UI with simulated packet loss for demos, and a genuine two-laptop UDP network implementation with real packet loss and priority-aware retries. It runs on a laptop today; porting the validated pipeline to Android is the next phase. See [Project Status](#-project-status) for exactly what's built vs. planned.
+This repo contains a **working, end-to-end desktop prototype** with two proven transport paths: a polished web UI with simulated packet loss for demos, and a genuine two-laptop UDP network implementation — real packets, real WiFi, real packet loss and priority-aware retries, tested and confirmed working across two separate physical laptops. It runs on a laptop today; porting the validated pipeline to Android is the next phase. See [Project Status](#-project-status) for exactly what's built vs. planned.
 
 ---
 
 ## 📑 Table of Contents
 
-- [What Changed in v2](#-what-changed-in-v2)
 - [Problem Statement](#-problem-statement)
 - [Core Idea](#-core-idea)
 - [Project Status](#-project-status)
@@ -25,7 +24,10 @@ This repo contains a **working, end-to-end desktop prototype** with two proven t
 - [Roadmap](#-roadmap)
 - [Known Limitations](#-known-limitations)
 - [Contributing](#-contributing)
+- [What Changed in v2](#-what-changed-in-v2)
 - [License](#-license)
+
+---
 
 ## 🎯 Problem Statement
 
@@ -103,31 +105,31 @@ This repo is a **working, end-to-end desktop prototype** with two proven transpo
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                              SENDER SIDE                                  │
-│                                                                            │
-│   🎤 Mic input                                                            │
-│      │                                                                    │
-│      ▼                                                                    │
+│                              SENDER SIDE                                 │
+│                                                                          │
+│   🎤 Mic input                                                          │
+│      │                                                                   │
+│      ▼                                                                   │
 │   Silero VAD  ──►  detects speech start/stop, trims silence (padded,     │
-│                     threshold=0.35, prints segment timestamps)            │
-│      │                                                                    │
-│      ▼                                                                    │
+│                     threshold=0.35, prints segment timestamps)           │
+│      │                                                                   │
+│      ▼                                                                   │
 │   ┌─────────────────────────┴──────────────────────────┐                 │
-│   │  language == "en"?                                  │                 │
-│   ▼                                                      ▼                 │
+│   │  language == "en"?                                  │                │
+│   ▼                                                      ▼               │
 │  Whisper large-v3-turbo                    IndicConformer (RNNT decoder) │
 │  (English STT)                             (Tamil / Hindi / Telugu STT)  │
-│   │                                                      │                 │
+│   │                                                      │               │
 │   └─────────────────────────┬──────────────────────────┘                 │
-│                              ▼                                            │
+│                              ▼                                           │
 │                     transcribed text                                     │
-│                              │                                            │
-│                              ▼                                            │
+│                              │                                           │
+│                              ▼                                           │
 │   gzip compression (bitrate_sim.py)  ──►  raw bytes if gzip doesn't help │
-│      │                                                                    │
-│      ▼                                                                    │
-│   Bitrate-mode simulation  ──►  HIGH / MEDIUM / LOW / EXTREME kbps        │
-└──────────────────────────────┬─────────────────────────────────────────┘
+│      │                                                                   │
+│      ▼                                                                   │
+│   Bitrate-mode simulation  ──►  HIGH / MEDIUM / LOW / EXTREME kbps       │
+└──────────────────────────────┬───────────────────────────────────────────┘
                                 │
         ┌───────────────────────┴────────────────────────┐
         ▼                                                  ▼
@@ -140,30 +142,30 @@ This repo is a **working, end-to-end desktop prototype** with two proven transpo
         └───────────────────────┬────────────────────────┘
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                             RECEIVER SIDE                                 │
-│                                                                            │
+│                             RECEIVER SIDE                                │
+│                                                                          │
 │   Reassemble packets  ──►  decompress text                               │
-│      │                                                                    │
-│      ▼                                                                    │
+│      │                                                                   │
+│      ▼                                                                   │
 │   receiver_pipeline.py: speak_text()  ──►  Indic Parler-TTS synthesis    │
 │      │                    (unchanged — doesn't know or care which        │
 │      │                     STT model produced the incoming text)         │
-│      ▼                                                                    │
+│      ▼                                                                   │
 │   🔊 Played as voice note / non-interruptible alert                      │
 └──────────────────────────────────────────────────────────────────────────┘
 
-              ┌────────────────────────────────────────┐
+              ┌─────────────────────────────────────────┐
               │   api_server.py (Flask, port 5000)      │
               │   wraps the ORIGINAL v1 pipeline as     │
               │   3 steps — not yet updated to v2's     │
               │   dual-STT or real transport            │
-              └───────────────┬──────────────────────────┘
+              └────────────────┬────────────────────────┘
                                │
-              ┌────────────────▼──────────────────────────┐
-              │   itantra-ui/ (Next.js, port 3000)         │
-              │   record button · bitrate & priority       │
-              │   controls · language picker · live stats  │
-              │   · receiver audio playback                │
+              ┌────────────────▼────────────────────────────┐
+              │   itantra-ui/ (Next.js, port 3000)          │
+              │   record button · bitrate & priority        │
+              │   controls · language picker · live stats   │
+              │   · receiver audio playback                 │
               └─────────────────────────────────────────────┘
 ```
 
@@ -392,6 +394,34 @@ This is an active SIH team project. If you're a teammate:
 4. Keep new dependencies open-source only (per PS constraints) — no proprietary/cloud STT or TTS SDKs.
 5. When adding a new language: add it to `INDIC_LANGUAGES` in `sender_pipeline.py` if it should route through IndicConformer, and add a matching entry to `receiver_pipeline.py`'s `VOICE_DESCRIPTIONS` dict, so STT and TTS stay in sync.
 6. If you're touching `sender_pipeline.py` in Notepad, be careful with indentation — Notepad has repeatedly mangled indentation on paste during this project's development. Prefer VS Code or another code-aware editor if available, and when in doubt, replace the entire function rather than patching a few lines.
+
+---
+
+## 🆕 What Changed in v2
+
+v1 used `openai/whisper-small` for speech-to-text across all four supported languages. In testing, Whisper's Tamil/Hindi/Telugu output was unreliable in two distinct ways, even after upgrading to `whisper-large-v3-turbo`:
+
+- **Hallucinated loops** — the model would get stuck repeating a short phrase over and over instead of transcribing what was actually said (a known Whisper failure mode, not specific to this project)
+- **Non-words** — on clean, correctly-captured audio, Whisper would output syllables that aren't real Tamil/Hindi/Telugu words at all
+
+A controlled test was run to isolate the cause: the same clean audio file (background noise eliminated, microphone gain corrected, VAD-trimmed) was fed to both Whisper and AI4Bharat's **IndicConformer** (`ai4bharat/indic-conformer-600m-multilingual`) back to back.
+
+**Result:**
+
+| Model                         | Output on a real Tamil test sentence                                                                                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Whisper (`large-v3-turbo`)    | `"நான்தக்கைத்துளிப்பருகிறால் வைக்கபாகிறால் காதில்கிறால்"` — not real words                                                                                                                |
+| IndicConformer (RNNT decoder) | `"வாய்ப்புகள் இருக்கிற கஷ்டத்தை பாக்குறவங்க தோத்துறாங்க அந்த கஷ்டத்திலயும் இருக்கிற வாய்ப்பை பாக்குறவங்க சிரிக்கிறாங்க"` — a coherent, ~95% word-accurate match to what was actually said |
+
+This was repeated across multiple fresh Tamil, Hindi, and Telugu recordings with consistent results: IndicConformer produced real, grammatical, largely-correct transcriptions every time; Whisper did not, regardless of audio quality.
+
+**v2's fix:** `sender_pipeline.py` now branches on the selected language. English still goes through Whisper (`large-v3-turbo`), unchanged. Tamil, Hindi, and Telugu are routed through IndicConformer's RNNT decoder instead. Nothing on the receiver side changed — the transport layer only ever carries plain text, so it has no idea (and doesn't need to know) which model produced it.
+
+Two smaller fixes landed alongside this:
+
+- **VAD sensitivity was tuned** (`threshold=0.35`, `min_speech_duration_ms=100`, down from Silero's defaults) after diagnosing that quiet speech and short clauses were sometimes being trimmed out entirely before reaching either STT model. `sender_pipeline.py` now prints every detected speech segment with timestamps, so this class of problem is visible immediately instead of only showing up as a bad transcription.
+- **Language selection is now a runtime prompt** in `network_sender.py` instead of a hardcoded value you had to edit and save before every run.
+- **Real two-laptop WiFi transport was tested and confirmed working** (see [Project Status](#-project-status)) — genuine UDP packets, sent and received across two separate physical machines, with real packet-loss recovery. This was already built in v1 but hadn't been documented as tested; v2's `CHECKING_TWO_LAPTOP_MODEL.md` walks through it step by step.
 
 ---
 
