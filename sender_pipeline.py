@@ -13,10 +13,13 @@ from bitrate_sim import compress_text, simulate_transmission, BITRATE_MODES, RAW
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {DEVICE}")
 
-MIC_INDEX = 7  # your mic's index
+MIC_INDEX = None  # your mic's index
 MAX_DURATION = 20  # absolute safety cap in seconds
 
-device_info = sd.query_devices(MIC_INDEX)
+if MIC_INDEX is None:
+    device_info = sd.query_devices(kind='input')
+else:
+    device_info = sd.query_devices(MIC_INDEX)
 native_rate = int(device_info["default_samplerate"])
 channels = device_info["max_input_channels"]
 

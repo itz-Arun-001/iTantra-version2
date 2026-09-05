@@ -31,6 +31,7 @@ export default function Page() {
   const [history, setHistory] = useState<Message[]>([])
   const [error, setError] = useState('')
   const [socket, setSocket] = useState<Socket | null>(null)
+  const [readyAudioId, setReadyAudioId] = useState<string | null>(null)
 
   useEffect(() => {
     const s = io(API || undefined, { transports: ['websocket', 'polling'] })
@@ -40,12 +41,14 @@ export default function Page() {
     s.on('sender_progress', (p) => { setStage(p.stage); setDetail(p.detail) })
     s.on('sender_done', (data) => { setSummary(data); setError(''); setStage('done') })
     s.on('sender_error', (e) => { setError(e.message); setStage('failed') })
-    s.on('message_received', (message) => { setLatest(message); setHistory((items) => [message, ...items.filter((item) => item.id !== message.id)].slice(0, 20)) })
+    s.on('message_received', (message) => { setLatest(message); setReadyAudioId(null); setHistory((items) => [message, ...items.filter((item) => item.id !== message.id)].slice(0, 20)) })
+    s.on('audio_ready', (data) => { setReadyAudioId(data.id) })
     fetch(`${API}/api/history`).then((r) => r.ok ? r.json() : []).then(setHistory).catch(() => undefined)
     return () => { s.disconnect() }
   }, [])
 
-  const audioUrl = useMemo(() => latest ? `${API}/api/received-audio/${latest.id}` : '', [latest])
+  const audioUrl = useMemo(() => (latest && readyAudioId === latest.id) ? `${API}/api/received-audio/${latest.id}` : '', 
+[latest, readyAudioId])
   async function changeRole(next: Role) {
     setRole(next); setError('')
     try { const response = await fetch(`${API}/api/role`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: next }) }); if (!response.ok) throw new Error((await response.json()).error); setDetail(next === 'receiver' ? 'UDP listener is active on port 5005' : 'Sender controls are armed') } catch (e) { setError(e instanceof Error ? e.message : 'Could not configure backend role') }

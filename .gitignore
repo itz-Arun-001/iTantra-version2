@@ -238,3 +238,4 @@ v0_ui_extracted/.env.local
 # Audio test files (optional — remove if you want to keep sample outputs in repo)
 output_speech.wav
 received_speech.wav
+v0_ui_extracted/backend/audio/
