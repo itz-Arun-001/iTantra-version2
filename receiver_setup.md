@@ -1,6 +1,8 @@
-# iTantra — Receiver Laptop Setup Guide
+# iTantra v2 — Receiver Laptop Setup Guide
 
 This guide covers everything needed to set up **one laptop as the RECEIVER** in the iTantra two-laptop network model. The receiver laptop listens over WiFi (UDP), reassembles the incoming text packets, decompresses them, and speaks the message out loud using AI4Bharat's Indic Parler-TTS model.
+
+> **v2 note:** the receiver role itself is unchanged from v1 — `network_receiver.py` and `receiver_pipeline.py` were never touched by the v2 STT upgrade (IndicConformer only affects the *sender's* speech-to-text step). This laptop only needs the TTS model, not IndicConformer, so its setup is simpler than the sender's — no CUDA Toolkit/cuDNN install and no second gated model required here.
 
 > This laptop does **not** need a microphone. It **does** need working speakers/headphones and a stable connection to the same WiFi network as the sender laptop.
 
@@ -67,10 +69,10 @@ If not recognized, install from [git-scm.com/downloads](https://git-scm.com/down
 
 ```powershell
 cd Desktop
-git clone https://github.com/itz-Arun-001/iTantra.git
-cd iTantra
+git clone https://github.com/itz-Arun-001/iTantra-version2.git
+cd iTantra-version2
 ```
-Expected: a new `iTantra` folder containing `network_receiver.py`, `receiver_pipeline.py`, `network_common.py`, `bitrate_sim.py`, etc.
+Expected: a new `iTantra-version2` folder containing `network_receiver.py`, `receiver_pipeline.py`, `network_common.py`, `bitrate_sim.py`, etc.
 
 ### Step 4 — Create and activate a virtual environment
 
@@ -87,7 +89,7 @@ Then re-run the activate command. This only applies to the current PowerShell wi
 
 Expected: your prompt now starts with `(venv)`.
 
-**Reminder:** Every time you close and reopen PowerShell, `cd` back into `iTantra` and re-run `venv\Scripts\Activate.ps1` before running any Python command — otherwise you'll get "module not found" errors even though everything is installed.
+**Reminder:** Every time you close and reopen PowerShell, `cd` back into `iTantra-version2` and re-run `venv\Scripts\Activate.ps1` before running any Python command — otherwise you'll get "module not found" errors even though everything is installed.
 
 ### Step 5 — Check for an NVIDIA GPU
 
@@ -100,9 +102,9 @@ nvidia-smi
 ### Step 6A — Install PyTorch (GPU / NVIDIA path)
 
 ```powershell
-pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install torch --index-url https://download.pytorch.org/whl/cu128
 ```
-This is a **large download (~2.5 GB)**.
+This is a **large download (~2.5 GB)**. `cu128` works with modern NVIDIA drivers even if `nvidia-smi` reports a newer supported CUDA version — drivers are backward-compatible with older CUDA builds.
 
 **⚠️ `ConnectionResetError` or download times out** → this is a normal, temporary network hiccup on unstable WiFi. Just **re-run the exact same command**; pip resumes the partial download. 2–3 attempts is common.
 
@@ -124,7 +126,7 @@ pip install git+https://github.com/huggingface/parler-tts.git
 
 If you're on the **GPU path**, also run:
 ```powershell
-pip install torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip install torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
 
 Expected: a long list of downloads ending in `Successfully installed ...` with no red `ERROR` lines. Yellow `WARNING` lines are safe to ignore.
@@ -149,8 +151,9 @@ The receiver loads **AI4Bharat Indic Parler-TTS**, which is a *gated* model — 
 3. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), click **New token**, name it anything, select the **Read** role, click **Create**, and copy the token.
 4. Log in from your terminal:
    ```powershell
-   huggingface-cli login
+   hf auth login
    ```
+   (`huggingface-cli login` is deprecated and no longer works — use `hf auth login` instead. If `hf` isn't recognized, run `pip install -U huggingface_hub` first.)
    Right-click to paste your token when prompted, press Enter. Type `y` if asked about git credentials.
 
 Expected output: `Login successful.`
@@ -193,7 +196,7 @@ The first time you run `network_receiver.py`, **Windows Defender Firewall will l
 Always do this **before** the sender starts sending (start the receiver first, so it's listening).
 
 ```powershell
-cd Desktop\iTantra
+cd Desktop\iTantra-version2
 venv\Scripts\Activate.ps1
 python network_receiver.py
 ```
@@ -243,7 +246,7 @@ Generating speech for: "Medical emergency near the village. Send help immediatel
 ```
 
 Then:
-1. Locate `received_speech.wav` in the `iTantra` project folder (it's overwritten on every new message).
+1. Locate `received_speech.wav` in the `iTantra-version2` project folder (it's overwritten on every new message).
 2. Double-click to play it, or open it in any media player.
 3. You should hear a synthesized voice speaking back the transcribed message.
 
@@ -305,7 +308,7 @@ Expected on CPU-only laptops without an NVIDIA GPU — this is a hardware limita
 ### `ModuleNotFoundError` for a package you already installed
 You forgot to activate the virtual environment in this PowerShell window:
 ```powershell
-cd Desktop\iTantra
+cd Desktop\iTantra-version2
 venv\Scripts\Activate.ps1
 ```
 Confirm `(venv)` shows in the prompt, then re-run the script.
@@ -338,4 +341,4 @@ If you get stuck, share all of the following so someone can help without guessin
 - Indic Parler-TTS model page (request access here): https://huggingface.co/ai4bharat/indic-parler-tts
 - Parler-TTS source (installed via `pip install git+...`): https://github.com/huggingface/parler-tts
 - Tailscale (for cross-network testing): https://tailscale.com/
-- Project repository: https://github.com/itz-Arun-001/iTantra
+- Project repository: https://github.com/itz-Arun-001/iTantra-version2
